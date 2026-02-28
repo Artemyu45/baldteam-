@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 
 import pygame
 
@@ -193,12 +194,11 @@ def log_reader_loop(process, state, stop_event):
         text = line.rstrip("\n")
         if not text:
             continue
-
-        # ВЫВОД В КОНСОЛЬ (терминал)
+            
+        # Выводим лог сервера прямо в консоль
         print(text)
 
         with state["lock"]:
-            # regex для обновления списка игроков
             m = connect_re.search(text)
             if m:
                 addr = m.group(1).strip()
@@ -433,6 +433,7 @@ def dashboard_loop(config, process):
         pygame.display.flip()
         clock.tick(30)
 
+    # Завершающий блок, который вы скинули
     stop_event.set()
     if process.poll() is None:
         process.terminate()

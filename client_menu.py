@@ -8,6 +8,7 @@ try:
 except ImportError:
     load_dotenv = None
 
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if load_dotenv is not None:
     load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -34,6 +35,7 @@ def get_ui_font(size, bold=False):
                 return pygame.font.Font(path, size)
             except Exception:
                 pass
+
     for name in ["arial", "helvetica", "dejavusans", "noto sans", "liberationsans", "segoeui"]:
         matched = pygame.font.match_font(name, bold=bold)
         if matched:
@@ -52,7 +54,6 @@ def run_menu():
     screen = pygame.display.set_mode((menu_w, menu_h))
     pygame.display.set_caption("Песочница пожара - Настройки клиента")
     clock = pygame.time.Clock()
-
     title_font = get_ui_font(36, bold=True)
     font = get_ui_font(24)
     hint_font = get_ui_font(18)
@@ -62,7 +63,6 @@ def run_menu():
         {"label": "Порт сервера", "value": str(default_port), "secret": False},
         {"label": "Пароль", "value": str(default_password), "secret": True},
     ]
-
     role_index = ROLES.index(default_role) if default_role in ROLES else 0
     active = 0
     error = ""
@@ -76,7 +76,6 @@ def run_menu():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return None
-
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if start_rect.collidepoint(event.pos):
                     try:
@@ -92,29 +91,29 @@ def run_menu():
                         }
                     except ValueError:
                         error = "Порт должен быть числом от 1 до 65535"
-
                 elif quit_rect.collidepoint(event.pos):
                     pygame.quit()
                     return None
-
                 else:
                     for i, rect in enumerate(input_rects):
                         if rect.collidepoint(event.pos):
                             active = i
                             break
-
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_TAB:
                     active = (active + 1) % len(fields)
-
                 elif event.key == pygame.K_LEFT:
                     role_index = (role_index - 1) % len(ROLES)
                 elif event.key == pygame.K_RIGHT:
                     role_index = (role_index + 1) % len(ROLES)
-
-                elif event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
-                    role_index = int(event.unicode) - 1
-
+                elif event.key == pygame.K_1:
+                    role_index = 0
+                elif event.key == pygame.K_2:
+                    role_index = 1
+                elif event.key == pygame.K_3:
+                    role_index = 2
+                elif event.key == pygame.K_4:
+                    role_index = 3
                 elif event.key == pygame.K_RETURN:
                     try:
                         port = int(fields[1]["value"])
@@ -129,49 +128,37 @@ def run_menu():
                         }
                     except ValueError:
                         error = "Порт должен быть числом от 1 до 65535"
-
                 elif event.key == pygame.K_BACKSPACE:
-                    if fields[active]["value"]:
-                        fields[active]["value"] = fields[active]["value"][:-1]
-                elif event.unicode.isprintable() and len(fields[active]["value"]) < 64:
-                    fields[active]["value"] += event.unicode
+                    fields[active]["value"] = fields[active]["value"][:-1]
+                else:
+                    if event.unicode.isprintable() and len(fields[active]["value"]) < 64:
+                        fields[active]["value"] += event.unicode
 
-        # ====================== ОТРИСОВКА ======================
         screen.fill((18, 24, 38))
-
         screen.blit(title_font.render("Меню клиента", True, (240, 244, 255)), (250, 28))
-        screen.blit(hint_font.render("TAB — следующее поле | ENTER — старт", True, (170, 188, 220)), (205, 72))
+        screen.blit(hint_font.render("TAB - следующее поле, ENTER - старт", True, (170, 188, 220)), (205, 72))
 
-        # Поля ввода
         for i, field in enumerate(fields):
             y = 108 + i * 68
             screen.blit(font.render(field["label"], True, (220, 225, 236)), (95, y + 10))
-
             color = (95, 160, 255) if i == active else (78, 90, 120)
-            rect = input_rects[i]
-            pygame.draw.rect(screen, color, rect, width=2, border_radius=7)
-
+            pygame.draw.rect(screen, color, input_rects[i], width=2, border_radius=7)
             shown = "*" * len(field["value"]) if field["secret"] else field["value"]
-            screen.blit(font.render(shown, True, (245, 245, 245)), (rect.x + 12, rect.y + 11))
+            screen.blit(font.render(shown, True, (245, 245, 245)), (input_rects[i].x + 10, input_rects[i].y + 10))
 
-        # Выбор роли
         role_rect = pygame.Rect(270, 312, 360, 48)
         pygame.draw.rect(screen, (78, 90, 120), role_rect, width=2, border_radius=7)
-        screen.blit(font.render("Роль игрока", True, (220, 225, 236)), (95, 322))
-        screen.blit(font.render(ROLE_LABELS[ROLES[role_index]], True, (245, 245, 245)),
-                    (role_rect.x + 12, role_rect.y + 11))
+        screen.blit(font.render("Роль", True, (220, 225, 236)), (95, 322))
+        screen.blit(font.render(ROLE_LABELS[ROLES[role_index]], True, (245, 245, 245)), (role_rect.x + 10, role_rect.y + 10))
+        screen.blit(hint_font.render("LEFT/RIGHT или 1-4: РТП/НШ/БР/Диспетчер", True, (170, 188, 220)), (165, 365))
 
-        screen.blit(hint_font.render("← → или 1-4 для выбора роли", True, (170, 188, 220)), (165, 365))
-
-        # Кнопки
         pygame.draw.rect(screen, (40, 160, 80), start_rect, border_radius=8)
         pygame.draw.rect(screen, (170, 60, 60), quit_rect, border_radius=8)
-
         screen.blit(font.render("Старт", True, (255, 255, 255)), (208, 405))
         screen.blit(font.render("Выход", True, (255, 255, 255)), (490, 405))
 
         if error:
-            screen.blit(hint_font.render(error, True, (255, 120, 120)), (190, 340))
+            screen.blit(hint_font.render(error, True, (255, 120, 120)), (180, 340))
 
         pygame.display.flip()
         clock.tick(60)
@@ -184,13 +171,7 @@ def main():
 
     env = os.environ.copy()
     env.update(config)
-
-    # Запускаем клиент в отдельном окне (удобно для Windows)
-    subprocess.Popen(
-        [sys.executable, os.path.join(BASE_DIR, "client.py")],
-        env=env,
-        creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
-    )
+    subprocess.Popen([sys.executable, os.path.join(BASE_DIR, "client.py")], env=env)
 
 
 if __name__ == "__main__":

@@ -8,11 +8,46 @@ import random
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 SERVER_IP = os.getenv('SERVER_IP', '127.0.0.1')
 SERVER_PORT = int(os.getenv('SERVER_PORT', 5555))
 SERVER_PASSWORD = os.getenv('SERVER_PASSWORD', 'my_super_password')
+PLAYER_ROLE = os.getenv('PLAYER_ROLE', 'rtp').lower()
+ROLES = ["rtp", "nsh", "br", "dispatcher"]
+ROLE_LABELS = {
+    "rtp": "РТП",
+    "nsh": "НШ",
+    "br": "БР",
+    "dispatcher": "Диспетчер",
+}
+if PLAYER_ROLE not in ROLES:
+    PLAYER_ROLE = "rtp"
+
+
+def get_ui_font(size, bold=False):
+    font_paths = [
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    for path in font_paths:
+        if os.path.exists(path):
+            try:
+                return pygame.font.Font(path, size)
+            except Exception:
+                pass
+
+    for name in ["arial", "helvetica", "dejavusans", "noto sans", "liberationsans", "segoeui"]:
+        matched = pygame.font.match_font(name, bold=bold)
+        if matched:
+            return pygame.font.Font(matched, size)
+    return pygame.font.SysFont(None, size, bold=bold)
+
 
 # ================= НАСТРОЙКИ ИГРЫ =================
 CELL = 16
@@ -26,13 +61,14 @@ FPS = 30
 
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption(f"Песочница пожара 3D [{SERVER_IP}]")
+
+pygame.display.set_caption(f"Песочница пожара [{SERVER_IP}] [{ROLE_LABELS.get(PLAYER_ROLE, PLAYER_ROLE)}]")
 clock = pygame.time.Clock()
-font = pygame.font.SysFont("consolas", 20)
-bigfont = pygame.font.SysFont("consolas", 32)
+font = get_ui_font(20)
+bigfont = get_ui_font(32)
 
 try:
-    fire_texture = pygame.image.load("fire.png").convert_alpha()
+    fire_texture = pygame.image.load(os.path.join(BASE_DIR, "fire.png")).convert_alpha()
 except FileNotFoundError:
     print("❌ Файл fire.png не найден!")
     sys.exit()
@@ -45,8 +81,9 @@ TOOLS = ["grass", "tree", "lake", "house", "wall", "floor", "stone", "ignite"]
 tool_names = {
     "grass": "Трава(1)", "tree": "Дерево(2)", "lake": "Озеро(3)",
     "house": "Дом(4)", "wall": "Стена(5)", "floor": "Пол(6)", 
-    "stone": "Камень(7)", "ignite": "Очаг(8)"
-}
+    "stone": "Камень(7)", "ignite": "Очаг(8)"}
+
+
 current_tool = "grass"
 
 # === Панель базового пола ===
@@ -65,17 +102,46 @@ for i, opt in enumerate(BASE_OPTIONS):
 RESET_RECT = pygame.Rect(GRID_WIDTH + 15, HEIGHT - 70, PANEL_WIDTH - 30, 45)
 
 # ================= СЕТЕВОЕ ВЗАИМОДЕЙСТВИЕ =================
+def recv_exact(sock, size):
+    data = b""
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+        if not chunk:
+            return None
+        data += chunk
+    return data
+
+
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
     print(f"🔄 Подключение к {SERVER_IP}:{SERVER_PORT}...")
     client.connect((SERVER_IP, SERVER_PORT))
     print("✅ Подключено к серверу!")
-    
-    auth_data = {'type': 'AUTH', 'password': SERVER_PASSWORD}
+
+    auth_data = {'type': 'AUTH', 'password': SERVER_PASSWORD, 'role': PLAYER_ROLE}
     msg = json.dumps(auth_data).encode('utf-8')
     client.sendall(struct.pack('>I', len(msg)) + msg)
+
+    client.settimeout(5.0)
+    raw_msglen = recv_exact(client, 4)
+    if not raw_msglen:
+        raise RuntimeError("Сервер не прислал ответ авторизации")
+    msglen = struct.unpack('>I', raw_msglen)[0]
+    payload = recv_exact(client, msglen)
+    if not payload:
+        raise RuntimeError("Сервер прислал неполный ответ авторизации")
+    auth_reply = json.loads(payload.decode("utf-8"))
+    if auth_reply.get("type") != "AUTH_OK":
+        raise RuntimeError(auth_reply.get("reason", "Ошибка авторизации"))
+    client.settimeout(None)
+    print(f"✅ Авторизация успешна. Роль: {ROLE_LABELS.get(PLAYER_ROLE, PLAYER_ROLE)}")
+    
 except Exception as e:
     print(f"❌ Не удалось подключиться к серверу: {e}")
+    try:
+        client.close()
+    except Exception:
+        pass
     sys.exit()
 
 def send_to_server(data):

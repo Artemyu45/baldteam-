@@ -4,12 +4,22 @@ import json
 import struct
 import time
 import random
+import os
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 
 # ================= НАСТРОЙКИ СЕРВЕРА =================
-HOST = '0.0.0.0'
-PORT = 5555
-MAX_PLAYERS = 8
-SERVER_PASSWORD = "my_super_password"   # ← измени на свой!
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if load_dotenv is not None:
+    load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+HOST = os.getenv("SERVER_HOST", "127.0.0.1")
+PORT = int(os.getenv("SERVER_PORT", "5555"))
+MAX_PLAYERS = int(os.getenv("MAX_PLAYERS", "5"))
+SERVER_PASSWORD = os.getenv("SERVER_PASSWORD", "my_super_password")
 
 COLS = 60
 ROWS = 44
@@ -223,7 +233,25 @@ def update_fire():
 
 # ================= СЕТЬ =================
 clients = []
+client_roles = {}
 grid_lock = threading.Lock()
+ALLOWED_ROLES = {"rtp", "nsh", "br", "dispatcher"}
+ROLE_LABELS = {
+    "rtp": "РТП",
+    "nsh": "НШ",
+    "br": "БР",
+    "dispatcher": "Диспетчер",
+}
+
+
+def recv_exact(sock, size):
+    data = b""
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+        if not chunk:
+            return None
+        data += chunk
+    return data
 
 def send_msg(sock, data):
     try:
@@ -234,32 +262,61 @@ def send_msg(sock, data):
 
 def client_thread(conn, addr):
     global edit_mode, running_sim, grid, WIND, WIND_STRENGTH
-    print(f"[?] Подключение от {addr}")
+    print(f"[?] Попытка входа от: {addr}. Ожидание авторизации...")
 
     try:
-        raw_msglen = conn.recv(4)
+        conn.settimeout(5.0)
+        raw_msglen = recv_exact(conn, 4)
+        if not raw_msglen:
+            print(f"[-] {addr} не прислал данные авторизации")
+            return
         msglen = struct.unpack('>I', raw_msglen)[0]
-        data = conn.recv(msglen)
-        auth = json.loads(data.decode('utf-8'))
-
-        if auth.get('type') != 'AUTH' or auth.get('password') != SERVER_PASSWORD:
-            print(f"[-] Неверный пароль от {addr}")
+        if msglen <= 0 or msglen > 4096:
+            print(f"[-] Некорректный пакет авторизации от {addr}: {msglen}")
             return
 
-        print(f"[+] {addr} успешно авторизован")
-        clients.append(conn)
+        data = recv_exact(conn, msglen)
+        if not data:
+            print(f"[-] Неполный пакет авторизации от {addr}")
+            return
 
+        auth_cmd = json.loads(data.decode('utf-8'))
+        role = str(auth_cmd.get('role', '')).lower()
+
+        if auth_cmd.get('type') != 'AUTH' or auth_cmd.get('password') != SERVER_PASSWORD:
+            send_msg(conn, {'type': 'AUTH_FAIL', 'reason': 'Неверный пароль'})
+            print(f"[-] Неверный пароль от {addr}. Отключаем.")
+            return
+
+        if role not in ALLOWED_ROLES:
+            send_msg(conn, {'type': 'AUTH_FAIL', 'reason': 'Недопустимая роль'})
+            print(f"[-] Недопустимая роль от {addr}: {role!r}. Отключаем.")
+            return
+
+        send_msg(conn, {'type': 'AUTH_OK', 'role': role})
+        conn.settimeout(None)
+
+        clients.append(conn)
+        client_roles[conn] = role
+        print(f"[+] Игрок {addr} вошел в игру. Роль: {ROLE_LABELS.get(role, role)}")
+        
         while True:
-            raw_msglen = conn.recv(4)
-            if not raw_msglen: break
+            raw_msglen = recv_exact(conn, 4)
+            if not raw_msglen:
+                break
             msglen = struct.unpack('>I', raw_msglen)[0]
-            data = conn.recv(msglen)
+            if msglen <= 0 or msglen > 200000:
+                break
+            data = recv_exact(conn, msglen)
+            if not data:
+                break
             cmd = json.loads(data.decode('utf-8'))
 
             with grid_lock:
-                if cmd['type'] == 'CLICK':
+                cmd_type = cmd.get('type')
+                if cmd_type == 'CLICK':
                     place_stamp(cmd['x'], cmd['y'], cmd['tool'])
-                elif cmd['type'] == 'FILL_BASE':
+                elif cmd_type == 'FILL_BASE':
                     tool = cmd['tool']
                     for yy in range(ROWS):
                         for xx in range(COLS):
@@ -281,24 +338,28 @@ def client_thread(conn, addr):
                                 c.heat = 0
                                 c.moisture = 25 if tool == "grass" else 15
                                 c.state = "unburned"
-                elif cmd['type'] == 'SPACE':
+                elif cmd_type == 'SPACE':
                     if edit_mode:
                         edit_mode = False
                         running_sim = True
                     else:
                         running_sim = not running_sim
-                elif cmd['type'] == 'R':
+                elif cmd_type == 'R':
                     grid = [[Cell() for _ in range(COLS)] for _ in range(ROWS)]
                     edit_mode = True
                     running_sim = False
 
-    except Exception:
-        pass
+    except socket.timeout:
+        print(f"[-] {addr} не прошел авторизацию вовремя. Отключен.")
+    except Exception as e:
+        print(f"[!] Ошибка клиента {addr}: {e}")
     finally:
         if conn in clients:
             clients.remove(conn)
+        if conn in client_roles:
+            del client_roles[conn]
         conn.close()
-        print(f"[-] {addr} отключился")
+        print(f"[-] Игрок отключен: {addr}")
 
 def game_loop():
     global frame
@@ -325,10 +386,10 @@ server.listen(MAX_PLAYERS)
 print(f"Сервер запущен на {HOST}:{PORT} | Пароль: {SERVER_PASSWORD}")
 
 threading.Thread(target=game_loop, daemon=True).start()
-
 while True:
     conn, addr = server.accept()
-    if len(clients) < MAX_PLAYERS:
-        threading.Thread(target=client_thread, args=(conn, addr), daemon=True).start()
-    else:
+    if len(clients) >= MAX_PLAYERS:
         conn.close()
+    else:
+        # Теперь мы НЕ добавляем в список клиентов сразу, а передаем в поток для проверки пароля
+        threading.Thread(target=client_thread, args=(conn, addr), daemon=True).start()
