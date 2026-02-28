@@ -55,6 +55,10 @@ FUEL_PROPERTIES = {
     "concrete": {"ign_temp": 9999, "burn_rate": 0,   "heat_gen": 0,   "spread_mult": 0},
     "hydrant":  {"ign_temp": 140,   "burn_rate": 0.4, "heat_gen": 35,  "spread_mult": 0.3},
     "wood_floor":{"ign_temp": 45,   "burn_rate": 2.8, "heat_gen": 75,  "spread_mult": 1.6},
+    "firecar_root": {"ign_temp": 9999, "burn_rate": 0, "heat_gen": 0, "spread_mult": 0},
+    "firecar_part": {"ign_temp": 9999, "burn_rate": 0, "heat_gen": 0, "spread_mult": 0},
+    "road_turn_root":     {"ign_temp": 9999, "burn_rate": 0, "heat_gen": 0, "spread_mult": 0},
+    "road_turn_part":     {"ign_temp": 9999, "burn_rate": 0, "heat_gen": 0, "spread_mult": 0},
 }
 
 def place_stamp(x, y, tool):
@@ -181,6 +185,51 @@ def place_stamp(x, y, tool):
         c.fuel = random.randint(140, 190)
         c.moisture = 12
         c.state = "unburned"
+    elif tool == "road_straight":
+        # Размер 64x64 = 4x4 клетки
+        w, h = 4, 4
+        if x + w <= COLS and y + h <= ROWS:
+            for dy in range(h):
+                for dx in range(w):
+                    c = grid[y + dy][x + dx]
+                    if dx == 0 and dy == 0:
+                        c.type = "road_straight_root" # Тут будет рисоваться текстура
+                    else:
+                        c.type = "road_straight_part" # Это просто физическое тело дороги
+                    c.fuel = 0
+                    c.moisture = 0
+                    c.intensity = 0
+                    c.state = "burned"
+
+    elif tool == "road_turn":
+        # Размер 80x80 = 5x5 клеток
+        w, h = 5, 5
+        if x + w <= COLS and y + h <= ROWS:
+            for dy in range(h):
+                for dx in range(w):
+                    c = grid[y + dy][x + dx]
+                    if dx == 0 and dy == 0:
+                        c.type = "road_turn_root"
+                    else:
+                        c.type = "road_turn_part"
+                    c.fuel = 0
+                    c.moisture = 0
+                    c.intensity = 0
+                    c.state = "burned"
+    elif tool == "firecar":
+        # Машина 64x128 пикселей = 4x8 клеток
+        if x + 3 < COLS and y + 7 < ROWS: # Проверка, чтобы не выйти за края карты
+            for dy in range(8):
+                for dx in range(4):
+                    c = grid[y + dy][x + dx]
+                    if dx == 0 and dy == 0:
+                        c.type = "firecar_root" # Главная клетка, где будет текстура
+                    else:
+                        c.type = "firecar_part" # Остальной корпус (коллизия)
+                    c.fuel = 0
+                    c.moisture = 0
+                    c.intensity = 0
+                    c.state = "burned" # Не горит
 
 def update_fire():
     if not running_sim: return
