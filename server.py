@@ -12,10 +12,14 @@ except ImportError:
     load_dotenv = None
 
 # ================= НАСТРОЙКИ СЕРВЕРА =================
-HOST = '0.0.0.0'
-PORT = 5555
-MAX_PLAYERS = 5
-SERVER_PASSWORD = "my_super_password" # <--- УСТАНОВИ СВОЙ ПАРОЛЬ ЗДЕСЬ
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if load_dotenv is not None:
+    load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+HOST = os.getenv("SERVER_HOST", "127.0.0.1")
+PORT = int(os.getenv("SERVER_PORT", "5555"))
+MAX_PLAYERS = int(os.getenv("MAX_PLAYERS", "5"))
+SERVER_PASSWORD = os.getenv("SERVER_PASSWORD", "my_super_password")
 
 COLS = 60
 ROWS = 44
