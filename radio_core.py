@@ -12,9 +12,12 @@ def get_audio_stream():
 
 def play(stream, audio_bytes):
     # Записываем байты напрямую в поток воспроизведения
-    stream.write(audio_bytes)
+    if stream:
+        stream.write(audio_bytes)
 
 def record(stream, frames):
     # Читаем данные из микрофона
-    data, overflowed = stream.read(frames)
-    return data # Возвращает bytes
+    if stream:
+        data, overflowed = stream.read(frames)
+        return data # Возвращает bytes
+    return b''
