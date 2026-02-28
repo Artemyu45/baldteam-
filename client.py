@@ -8,11 +8,18 @@ import random
 import os
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения из файла .env
+<<<<<<< HEAD
 load_dotenv()
 
+=======
+# Загружаем переменные окружения из файла .env рядом со скриптом
+BASE_DIR = 
+.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
 # ================= НАСТРОЙКИ СЕТИ =================
-# os.getenv берет значение из .env. Вторым аргументом указано значение по умолчанию (на случай, если .env нет или там пусто)
+# os.getenv берет значение из .env. Вторым аргументом указано значение по умолчанию.
+>>>>>>> 61f7d78 (add menu)
 SERVER_IP = os.getenv('SERVER_IP', '127.0.0.1')
 SERVER_PORT = int(os.getenv('SERVER_PORT', 5555))
 SERVER_PASSWORD = os.getenv('SERVER_PASSWORD', 'my_super_password')
@@ -61,7 +68,11 @@ FPS = 30
 
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption(f"Песочница пожара [{SERVER_IP}]")
+<<<<<<< HEAD
+pygame.display.set_caption(f"Песочница пожара 3D [{SERVER_IP}]")
+=======
+pygame.display.set_caption(f"Песочница пожара [{SERVER_IP}] [{ROLE_LABELS.get(PLAYER_ROLE, PLAYER_ROLE)}]")
+>>>>>>> 61f7d78 (add menu)
 clock = pygame.time.Clock()
 font = get_ui_font(20)
 bigfont = get_ui_font(32)
@@ -78,8 +89,14 @@ running_sim = False
 
 TOOLS = ["grass", "tree", "lake", "house", "wall", "floor", "stone", "ignite"]
 tool_names = {
-    "grass": "Трава 🌿(1)", "tree": "Дерево 🌲(2)", "lake": "Озеро 💧(3)",
-    "house": "Дом 🏠(4)", "wall": "Стена(5)", "floor": "Пол(6)", "ignite": "Очаг 🔥(7)"
+<<<<<<< HEAD
+    "grass": "Трава(1)", "tree": "Дерево(2)", "lake": "Озеро(3)",
+    "house": "Дом(4)", "wall": "Стена(5)", "floor": "Пол(6)", 
+    "stone": "Камень(7)", "ignite": "Очаг(8)"
+=======
+    "grass": "Трава (1)", "tree": "Дерево (2)", "lake": "Озеро (3)",
+    "house": "Дом (4)", "wall": "Стена (5)", "floor": "Пол (6)", "ignite": "Очаг (7)"
+>>>>>>> 61f7d78 (add menu)
 }
 current_tool = "grass"
 
@@ -115,11 +132,31 @@ try:
     client.connect((SERVER_IP, SERVER_PORT))
     print("✅ Подключено к серверу!")
     
-    # СРАЗУ ПОСЛЕ ПОДКЛЮЧЕНИЯ ОТПРАВЛЯЕМ ПАРОЛЬ
+<<<<<<< HEAD
     auth_data = {'type': 'AUTH', 'password': SERVER_PASSWORD}
     msg = json.dumps(auth_data).encode('utf-8')
     client.sendall(struct.pack('>I', len(msg)) + msg)
+=======
+    # СРАЗУ ПОСЛЕ ПОДКЛЮЧЕНИЯ ОТПРАВЛЯЕМ ПАРОЛЬ
+    auth_data = {'type': 'AUTH', 'password': SERVER_PASSWORD, 'role': PLAYER_ROLE}
+    msg = json.dumps(auth_data).encode('utf-8')
+    client.sendall(struct.pack('>I', len(msg)) + msg)
+
+    client.settimeout(5.0)
+    raw_msglen = recv_exact(client, 4)
+    if not raw_msglen:
+        raise RuntimeError("Сервер не прислал ответ авторизации")
+    msglen = struct.unpack('>I', raw_msglen)[0]
+    payload = recv_exact(client, msglen)
+    if not payload:
+        raise RuntimeError("Сервер прислал неполный ответ авторизации")
+    auth_reply = json.loads(payload.decode("utf-8"))
+    if auth_reply.get("type") != "AUTH_OK":
+        raise RuntimeError(auth_reply.get("reason", "Ошибка авторизации"))
+    client.settimeout(None)
+    print(f"✅ Авторизация успешна. Роль: {ROLE_LABELS.get(PLAYER_ROLE, PLAYER_ROLE)}")
     
+>>>>>>> 61f7d78 (add menu)
 except Exception as e:
     print(f"❌ Не удалось подключиться к серверу: {e}")
     try:
